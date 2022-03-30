@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
+using BattleRoyale.Interfaces;
 
 namespace BattleRoyale
 {
@@ -9,8 +10,9 @@ namespace BattleRoyale
     [RequireComponent(typeof(Collider))]
     public class BulletController : NetworkBehaviour
     {
-        public float damage;
+        public int damage;
         public float force;
+        public GameObject explosionVfx;
 
         private void Awake()
         {
@@ -21,9 +23,16 @@ namespace BattleRoyale
         [ServerCallback]
         private void OnCollisionEnter(Collision collision)
         {
-            //Provare Danno
-
-            NetworkServer.Destroy(gameObject);
+            Instantiate(explosionVfx, transform.position, transform.rotation);
+            if(isServer)
+            {
+                NetworkServer.Destroy(gameObject);
+                var damageable = collision.gameObject.GetComponent<Interfaces.IDamageable>();
+                if(damageable != null)
+                {
+                    damageable.Damage(damage);
+                }
+            }
         }
     }
 }
