@@ -4,10 +4,9 @@ using UnityEngine;
 
 public class SelfDestroy : MonoBehaviour
 {
-    public int delay = 2;
+    public float delay = 1;
     void Start()
     {
-        Destroy(gameObject, delay);
+        Destroy(gameObject, delay);        
     }
-
 }

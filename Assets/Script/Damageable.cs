@@ -5,35 +5,35 @@ using BattleRoyale.Interfaces;
 using Mirror;
 using TMPro;
 
-namespace BattleRoyale
+public class Damageable : NetworkBehaviour, IDamageable
 {
-    public class Damageable : NetworkBehaviour, Interfaces.IDamageable
+    [SerializeField]
+    [SyncVar(hook = nameof(HealthChanged))]
+    private int _health = 10;
+
+    public TextMeshProUGUI label;
+
+    public override void OnStartClient()
     {
-        [SerializeField]
-        protected int _health = 10;
-        public int Health => _health;
-        public TextMeshPro label;
+        base.OnStartClient();
+        label.text = _health.ToString();
+    }
 
-        public override void OnStartClient()
-        {
-            base.OnStartClient();
-            UpdateUI();
-        }
+    private void HealthChanged(int _, int newValue)
+    {
+        label.text = newValue.ToString();
+    }
 
-        private void UpdateUI()
-        {
-            label.text = _health.ToString();
-        }
+    public int Health => _health;
 
-        public void Damage(int damageAmount)
+    public void Damage(int damageAmount)
+    {
+        Debug.Log("Damage: " + damageAmount);
+        if (!isServer) return;
+        _health -= damageAmount;
+        if(_health <= 0)
         {
-            if (!isServer) return;
-            _health -= damageAmount;
-            if(_health <= 0)
-            {
-                NetworkServer.Destroy(gameObject);
-            }
+            NetworkServer.Destroy(gameObject);
         }
     }
 }
-

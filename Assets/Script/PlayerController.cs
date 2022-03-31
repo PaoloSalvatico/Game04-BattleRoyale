@@ -11,60 +11,86 @@ namespace BattleRoyale
     public class PlayerController : NetworkBehaviour, IDamageable
     {
         private CharacterController _controller;
-        [SerializeField] private PlayerStatsObj stats;
-        [SerializeField] private WeaponstatsObj _weaponStats;
+
+        [SerializeField] private PlayerStatsSO stats;
+        [SerializeField] private WeaponsStatsSO weaponStats;
         [SerializeField] private Animator _animator;
-        [SerializeField] private Transform spawnPoint;
+        [SerializeField] private Transform _spawnPoint;
         [SerializeField] private NetworkAnimator _networkAnimator;
 
-        private AnimationEventsDispatcher _eventDispatcher;
-        private bool isShooting = false;
+        private AnimationEventDispatcher _eventDispatcher;
+
+        private bool _isShooting;
+
         private int _hitPoints;
 
         public int Health => _hitPoints;
 
-        private void Awake()
+        void Awake()
         {
             _hitPoints = stats.HitPoints;
+
             _controller = GetComponent<CharacterController>();
-            _eventDispatcher = GetComponentInChildren<AnimationEventsDispatcher>();
-        }
-
-        // Funzione eseguita solo sul server
-        [ServerCallback]
-        private void Start()
-        {
-            Debug.Log("Sono il server");
-            RpcTestClient();
-        }
-
-        // Funzione eseguita solo dai client
-        [ClientRpc]
-        private void RpcTestClient()
-        {
-            Debug.Log("Sono il client");
+            _eventDispatcher = GetComponentInChildren<AnimationEventDispatcher>();
         }
 
         public override void OnStartClient()
         {
             base.OnStartClient();
 
-            var prefab = _weaponStats.Bullet;
+            var prefab = weaponStats.Bullet;
             var ni = prefab.GetComponent<NetworkIdentity>();
             if(ni != null && !NetworkClient.prefabs.ContainsKey(ni.assetId))
             {
-                NetworkClient.RegisterPrefab(prefab);
+                NetworkClient.RegisterPrefab(weaponStats.Bullet);
+            }
+
+            if (isLocalPlayer)
+            {
+                CameraManager.Instance.SetTarget(transform);
             }
         }
 
         private void OnEnable()
         {
-            _eventDispatcher.shootEventStart += OnShootStarted;
-            _eventDispatcher.shootEventEnd += OnShootEnded;
+            _eventDispatcher.ShootStarted += OnShootStarted;    
+            _eventDispatcher.ShootEnded += OnShootEnded;
         }
+
         private void OnDisable()
         {
+            _eventDispatcher.ShootStarted -= OnShootStarted;
+            _eventDispatcher.ShootEnded -= OnShootEnded;
+        }
 
+        void Update()
+        {
+            if (!isLocalPlayer) return;
+
+            // Fase di movimento
+
+            var m = stats.MoveSpeed;
+            if (Input.GetKey(KeyCode.Space)) m *= 2;
+
+            var move = Input.GetAxis("Vertical") * m * transform.forward;
+            _controller.SimpleMove(move);
+
+            var rot = Input.GetAxis("Horizontal") * stats.RotationSpeed * transform.up;
+            transform.Rotate(rot);
+
+            _animator.SetFloat("Speed", _controller.velocity.magnitude);
+
+            // Fase di Fuoco
+            if(Input.GetButtonDown("Fire1") && !_isShooting)
+            {
+                _isShooting = true;
+                _networkAnimator.SetTrigger(weaponStats.AnimatorParameter);
+            }
+        }
+
+        private void OnShootEnded()
+        {
+            _isShooting = false;
         }
 
         private void OnShootStarted()
@@ -73,50 +99,29 @@ namespace BattleRoyale
             CmdSpawnBullet();
         }
 
-        private void OnShootEnded()
-        {
-            isShooting = false;
-        }
-
-
-        private void Update()
-        {
-            if (!isLocalPlayer) return;
-
-            //Fase di MOvimento
-            var m = stats.MoveSpeed;
-            if (Input.GetKey(KeyCode.Space)) m *= 2;
-
-            var move = Input.GetAxis("Vertical") * stats.MoveSpeed * transform.forward;
-            _controller.SimpleMove(move);
-
-            var rotation = Input.GetAxis("Horizontal") * stats.RotationSpeed * Vector3.up;
-            transform.Rotate(rotation);
-
-            _animator.SetFloat("Speed", _controller.velocity.magnitude);
-
-            // Fase di Sparo
-            if(Input.GetButtonDown("Fire1") && !isShooting)
-            {
-                isShooting = true;
-                _networkAnimator.SetTrigger(_weaponStats.AnimatorParameter);
-            }
-        }
-
         [Command]
-        private void CmdSpawnBullet()
+        void CmdSpawnBullet()
         {
-            //_animator.SetTrigger(_weaponStats.AnimatorParameter);
-            var go = Instantiate(_weaponStats.Bullet, spawnPoint.position, spawnPoint.rotation);
+            //            _animator.SetTrigger(weaponStats.AnimatorParameter);
+            var go = Instantiate(weaponStats.Bullet, _spawnPoint.position, _spawnPoint.rotation);
             NetworkServer.Spawn(go);
         }
 
         public void Damage(int damageAmount)
         {
-            damageAmount -= stats.Armor;
-            damageAmount = Mathf.Clamp(damageAmount, 0, 10000);
+            damageAmount -= stats.Armour;
+            damageAmount = Mathf.Clamp(damageAmount, 0, 100000);
+            _hitPoints -= damageAmount;
+            if(_hitPoints <= 0)
+            {
+                // sei morto
+            }
+        }
 
+        private void OnDestroy()
+        {
+            CameraManager.Instance.SetTarget(null);
         }
     }
-}
 
+}
